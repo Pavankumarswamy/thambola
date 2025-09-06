@@ -37,8 +37,18 @@ serve(async (req) => {
       throw new Error('Prize already claimed')
     }
 
+    // Ensure ticket numbers is a flat array of 15 numbers
+    let ticketNumbers = ticket.numbers;
+    if (Array.isArray(ticketNumbers) && Array.isArray(ticketNumbers[0])) {
+      ticketNumbers = ticketNumbers.flat();
+    }
+    
+    if (!Array.isArray(ticketNumbers) || ticketNumbers.length !== 15) {
+      throw new Error('Invalid ticket format')
+    }
+
     // Validate prize claim
-    const isValid = validatePrizeClaim(ticket.numbers, drawnNumbers, prizeType)
+    const isValid = validatePrizeClaim(ticketNumbers, drawnNumbers, prizeType)
     
     if (!isValid) {
       return new Response(JSON.stringify({ success: false, message: 'Invalid prize claim' }), {
@@ -91,29 +101,51 @@ serve(async (req) => {
 })
 
 function validatePrizeClaim(ticketNumbers: number[], drawnNumbers: number[], prizeType: string): boolean {
-  const matchedNumbers = ticketNumbers.filter(num => drawnNumbers.includes(num))
+  // Filter out zero/empty numbers and find matches
+  const validTicketNumbers = ticketNumbers.filter(num => num > 0);
+  const matchedNumbers = validTicketNumbers.filter(num => drawnNumbers.includes(num));
+  
+  console.log(`Validating ${prizeType}: ${matchedNumbers.length} matches out of ${validTicketNumbers.length} valid numbers`);
   
   switch (prizeType) {
     case 'early_five':
-      return matchedNumbers.length >= 5
+      // Early five: first 5 numbers to be struck off
+      return matchedNumbers.length >= 5;
+      
     case 'top_line':
-    case 'middle_line': 
+      // Top line: first 5 numbers of the ticket (positions 0-4)
+      const topLineNumbers = ticketNumbers.slice(0, 5).filter(num => num > 0);
+      const topLineMatches = topLineNumbers.filter(num => drawnNumbers.includes(num));
+      return topLineMatches.length === topLineNumbers.length && topLineNumbers.length > 0;
+      
+    case 'middle_line':
+      // Middle line: middle 5 numbers of the ticket (positions 5-9)
+      const middleLineNumbers = ticketNumbers.slice(5, 10).filter(num => num > 0);
+      const middleLineMatches = middleLineNumbers.filter(num => drawnNumbers.includes(num));
+      return middleLineMatches.length === middleLineNumbers.length && middleLineNumbers.length > 0;
+      
     case 'bottom_line':
-      return matchedNumbers.length >= 5 // Simplified validation
+      // Bottom line: last 5 numbers of the ticket (positions 10-14)
+      const bottomLineNumbers = ticketNumbers.slice(10, 15).filter(num => num > 0);
+      const bottomLineMatches = bottomLineNumbers.filter(num => drawnNumbers.includes(num));
+      return bottomLineMatches.length === bottomLineNumbers.length && bottomLineNumbers.length > 0;
+      
     case 'full_house':
-      return matchedNumbers.length === 15
+      // Full house: all numbers on the ticket
+      return matchedNumbers.length === validTicketNumbers.length && validTicketNumbers.length === 15;
+      
     default:
-      return false
+      return false;
   }
 }
 
 function calculatePrizeAmount(prizePool: number, prizeType: string): number {
   switch (prizeType) {
-    case 'early_five': return Math.floor(prizePool * 0.20)
-    case 'top_line': return Math.floor(prizePool * 0.15)
-    case 'middle_line': return Math.floor(prizePool * 0.15)
-    case 'bottom_line': return Math.floor(prizePool * 0.15)
-    case 'full_house': return Math.floor(prizePool * 0.35)
-    default: return 0
+    case 'early_five': return Math.floor(prizePool * 0.20);
+    case 'top_line': return Math.floor(prizePool * 0.15);
+    case 'middle_line': return Math.floor(prizePool * 0.15);
+    case 'bottom_line': return Math.floor(prizePool * 0.15);
+    case 'full_house': return Math.floor(prizePool * 0.35);
+    default: return 0;
   }
 }

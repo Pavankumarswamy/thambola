@@ -19,7 +19,7 @@ serve(async (req) => {
 
     const { gameId, userId, ticketPrice } = await req.json()
 
-    // Generate tambola ticket
+    // Generate tambola ticket with exactly 15 numbers
     const numbers = generateTambolaTicket()
 
     // Start transaction
@@ -108,75 +108,36 @@ serve(async (req) => {
   }
 })
 
-function generateTambolaTicket(): number[][] {
-  // Create a 3x5 grid for housie ticket (3 rows, 5 numbers each)
-  const ticket: number[][] = [[], [], []]
+function generateTambolaTicket(): number[] {
+  // Generate exactly 15 unique numbers between 1-90
+  const allNumbers = Array.from({ length: 90 }, (_, i) => i + 1);
+  const selectedNumbers: number[] = [];
   
-  // Define column ranges: 1-9, 10-19, 20-29, 30-39, 40-49, 50-59, 60-69, 70-79, 80-89
-  const columnRanges = [
-    { min: 1, max: 9 },
-    { min: 10, max: 19 },
-    { min: 20, max: 29 },
-    { min: 30, max: 39 },
-    { min: 40, max: 49 },
-    { min: 50, max: 59 },
-    { min: 60, max: 69 },
-    { min: 70, max: 79 },
-    { min: 80, max: 89 }
-  ]
-  
-  // For each row, select 5 numbers from different columns
-  for (let row = 0; row < 3; row++) {
-    const usedColumns = new Set<number>()
-    const rowNumbers: number[] = []
-    
-    // Select 5 numbers, each from a different column
-    for (let i = 0; i < 5; i++) {
-      let columnIndex: number
-      let attempts = 0
-      
-      // Find an unused column
-      do {
-        columnIndex = Math.floor(Math.random() * 9)
-        attempts++
-      } while (usedColumns.has(columnIndex) && attempts < 50)
-      
-      // If we can't find an unused column, pick any column
-      if (attempts >= 50) {
-        columnIndex = Math.floor(Math.random() * 9)
-      }
-      
-      usedColumns.add(columnIndex)
-      
-      // Select a random number from this column range
-      const range = columnRanges[columnIndex]
-      const availableNumbers = []
-      for (let num = range.min; num <= range.max; num++) {
-        availableNumbers.push(num)
-      }
-      
-      // Shuffle and pick a number
-      const shuffled = availableNumbers.sort(() => Math.random() - 0.5)
-      const selectedNumber = shuffled[0]
-      
-      rowNumbers.push(selectedNumber)
-    }
-    
-    // Sort the row numbers
-    rowNumbers.sort((a, b) => a - b)
-    ticket[row] = rowNumbers
+  // Shuffle the array using Fisher-Yates algorithm
+  for (let i = allNumbers.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [allNumbers[i], allNumbers[j]] = [allNumbers[j], allNumbers[i]];
   }
   
-  // Ensure no duplicate numbers across the entire ticket
-  const allNumbers: number[] = []
-  ticket.forEach(row => allNumbers.push(...row))
+  // Take the first 15 numbers
+  selectedNumbers.push(...allNumbers.slice(0, 15));
   
-  // If there are duplicates, regenerate the ticket
-  const uniqueNumbers = new Set(allNumbers)
+  // Sort the numbers for better readability
+  selectedNumbers.sort((a, b) => a - b);
+  
+  // Verify we have exactly 15 unique numbers
+  if (selectedNumbers.length !== 15) {
+    console.error('Generated ticket does not have exactly 15 numbers');
+    throw new Error('Failed to generate valid ticket');
+  }
+  
+  // Verify all numbers are unique
+  const uniqueNumbers = new Set(selectedNumbers);
   if (uniqueNumbers.size !== 15) {
-    console.log('Duplicate numbers found, regenerating ticket...')
-    return generateTambolaTicket()
+    console.error('Generated ticket has duplicate numbers');
+    throw new Error('Failed to generate valid ticket');
   }
   
-  return ticket
+  console.log('Generated 15-digit ticket:', selectedNumbers);
+  return selectedNumbers;
 }

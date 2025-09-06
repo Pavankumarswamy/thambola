@@ -30,6 +30,7 @@ const Game = () => {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [claimedPrizes, setClaimedPrizes] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
 
@@ -123,16 +124,39 @@ const Game = () => {
         
         console.log('Ticket data loaded:', ticketData);
         
-        // Ensure ticket numbers is in correct format
-        if (ticketData.numbers && !Array.isArray(ticketData.numbers)) {
-          console.warn('Ticket numbers is not an array, converting...');
-          // If numbers is stored as a string or other format, convert it
-          try {
-            ticketData.numbers = JSON.parse(ticketData.numbers);
-          } catch (e) {
-            console.error('Failed to parse ticket numbers:', e);
-            ticketData.numbers = [[], [], []]; // Default empty ticket
+        // Ensure ticket numbers is in correct format (flat array of 15 numbers)
+        if (ticketData.numbers) {
+          let numbers = ticketData.numbers;
+          
+          // If it's a string, parse it
+          if (typeof numbers === 'string') {
+            try {
+              numbers = JSON.parse(numbers);
+            } catch (e) {
+              console.error('Failed to parse ticket numbers:', e);
+              numbers = [];
+            }
           }
+          
+          // If it's a 2D array, flatten it
+          if (Array.isArray(numbers) && Array.isArray(numbers[0])) {
+            numbers = numbers.flat();
+          }
+          
+          // Ensure we have exactly 15 numbers
+          if (!Array.isArray(numbers) || numbers.length !== 15) {
+            console.warn('Ticket numbers format invalid, using empty ticket');
+            numbers = Array(15).fill(0);
+          }
+          
+          ticketData.numbers = numbers;
+        } else {
+          ticketData.numbers = Array(15).fill(0);
+        }
+        
+        // Set claimed prizes
+        if (ticketData.claimed_prizes) {
+          setClaimedPrizes(new Set(Object.keys(ticketData.claimed_prizes).filter(key => ticketData.claimed_prizes[key])));
         }
         
         setTicket(ticketData);
@@ -150,8 +174,28 @@ const Game = () => {
     }
   };
 
+  const handleWinDetected = (winType: string) => {
+    // Only show notification if this prize hasn't been claimed yet
+    if (!claimedPrizes.has(winType)) {
+      toast({
+        title: "Potential Win Detected!",
+        description: `You may have won ${winType.replace('_', ' ').toUpperCase()}! Click to claim your prize.`,
+      });
+    }
+  };
+
   const claimPrize = async (prizeType: string) => {
     if (!ticket || !game) return;
+
+    // Check if already claimed
+    if (claimedPrizes.has(prizeType)) {
+      toast({
+        title: "Already Claimed",
+        description: "You have already claimed this prize",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setLoading(true);
     try {
@@ -171,6 +215,9 @@ const Game = () => {
           title: "Prize Claimed!",
           description: `You won ₹${data.amount} for ${prizeType}!`,
         });
+        
+        // Update claimed prizes
+        setClaimedPrizes(prev => new Set([...prev, prizeType]));
         loadGameData(); // Refresh data
       } else {
         toast({
@@ -333,11 +380,13 @@ const Game = () => {
                     numbers={ticket.numbers} 
                     gameId={game.id}
                     ticketId={ticket.id}
+                   drawnNumbers={drawnNumbers}
+                   onWinDetected={handleWinDetected}
                     className="mb-6"
                   />
                   
                   {/* Prize Claim Buttons */}
-          {game.status === "running" && (
+                 {game.status === "running" && (
                     <div className="mt-6 space-y-3">
                       <h3 className="font-semibold text-center">Claim Prizes</h3>
                       <div className="grid grid-cols-2 gap-3">
@@ -345,7 +394,7 @@ const Game = () => {
                           variant="outline"
                           className="flex items-center justify-between p-3 h-auto"
                           onClick={() => claimPrize("early_five")}
-                          disabled={ticket.claimed_prizes?.early_five}
+                          disabled={claimedPrizes.has("early_five")}
                         >
                           <div>
                             <div className="font-medium">Early Five</div>
@@ -358,7 +407,7 @@ const Game = () => {
                           variant="outline"
                           className="flex items-center justify-between p-3 h-auto"
                           onClick={() => claimPrize("top_line")}
-                          disabled={ticket.claimed_prizes?.top_line}
+                          disabled={claimedPrizes.has("top_line")}
                         >
                           <div>
                             <div className="font-medium">Top Line</div>
@@ -371,7 +420,7 @@ const Game = () => {
                           variant="outline"
                           className="flex items-center justify-between p-3 h-auto"
                           onClick={() => claimPrize("middle_line")}
-                          disabled={ticket.claimed_prizes?.middle_line}
+                          disabled={claimedPrizes.has("middle_line")}
                         >
                           <div>
                             <div className="font-medium">Middle Line</div>
@@ -384,7 +433,7 @@ const Game = () => {
                           variant="outline"
                           className="flex items-center justify-between p-3 h-auto"
                           onClick={() => claimPrize("bottom_line")}
-                          disabled={ticket.claimed_prizes?.bottom_line}
+                          disabled={claimedPrizes.has("bottom_line")}
                         >
                           <div>
                             <div className="font-medium">Bottom Line</div>
@@ -396,7 +445,7 @@ const Game = () => {
                         <Button
                           className="col-span-2 flex items-center justify-between p-4 h-auto bg-primary hover:bg-primary/90 text-primary-foreground"
                           onClick={() => claimPrize("full_house")}
-                          disabled={ticket.claimed_prizes?.full_house}
+                          disabled={claimedPrizes.has("full_house")}
                         >
                           <div>
                             <div className="font-medium text-lg">Full House</div>
